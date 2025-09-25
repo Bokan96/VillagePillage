@@ -23,3 +23,8 @@ Thumbs.db
 
 # Keep docs folder for GitHub Pages
 !docs/
+
+# Visual Studio
+.vs/
+.vscode/
+*.vsconfig

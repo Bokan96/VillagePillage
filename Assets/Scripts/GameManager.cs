@@ -20,6 +20,7 @@ public class GameManager : MonoBehaviourPunCallbacks
     public TextMeshProUGUI timerText;
     public TextMeshProUGUI turnipsText;
     public TextMeshProUGUI relicProgress;
+    public TextMeshProUGUI versionText;
 
     [Header("Bot Settings")]
     public int botCount = 0;
@@ -65,6 +66,7 @@ public class GameManager : MonoBehaviourPunCallbacks
 
     void Start()
     {
+        versionText.text = $"v{Application.version}";
         UpdateUI();
     }
 
