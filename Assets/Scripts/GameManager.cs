@@ -25,6 +25,7 @@ public class GameManager : MonoBehaviourPunCallbacks
     [Header("Bot Settings")]
     public int botCount = 0;
     private bool[] isBot = new bool[3];
+    private bool botsHaveMoved = false;
 
     [Header("Player Area")]
     public List<Image> handCards;
@@ -180,6 +181,7 @@ public class GameManager : MonoBehaviourPunCallbacks
 
         selectedLeftCard = null;
         selectedRightCard = null;
+        botsHaveMoved = false; // Reset bot flag for new round
 
         UpdateHandDisplay();
         StartCoroutine(PlanningTimer());
@@ -191,10 +193,15 @@ public class GameManager : MonoBehaviourPunCallbacks
         {
             currentTimer -= Time.deltaTime;
             UpdateUI();
-            if (currentTimer <= 25f && PhotonNetwork.IsMasterClient)
+            
+            // Bots move at 5 seconds remaining
+            if (currentTimer <= turnTimer - 5f && !botsHaveMoved && PhotonNetwork.IsMasterClient)
             {
+                Debug.Log($"Bots making moves at {currentTimer:F1} seconds remaining");
                 SimulateBotMoves();
+                botsHaveMoved = true;
             }
+
             yield return null;
         }
 
@@ -419,6 +426,7 @@ public class GameManager : MonoBehaviourPunCallbacks
                 // Random card selection for bots
                 int leftCard = Random.Range(1, 5);
                 int rightCard = Random.Range(1, 5);
+                Debug.Log($"Bot {i} selecting cards: Left={leftCard}, Right={rightCard}");
                 photonView.RPC("ReceiveCardSelection", RpcTarget.All, i + 1, leftCard, rightCard);
             }
         }
@@ -427,7 +435,7 @@ public class GameManager : MonoBehaviourPunCallbacks
     [PunRPC]
     void ReceiveCardSelection(int playerActorNumber, int leftCardId, int rightCardId)
     {
-
+        // Prevent processing if we've already moved past planning
         if (currentPhase != GamePhase.Planning) return;
 
         int playerPos = playerActorNumber - 1; // Convert to 0,1,2
@@ -447,8 +455,8 @@ public class GameManager : MonoBehaviourPunCallbacks
         // Display opponent cards in UI
         DisplayOpponentCards(playerPos, leftCardId, rightCardId);
 
-        // Check if all players have submitted
-        if (allPlayerSelections.Count == 3)
+        // Check if all players have submitted AND we're still in planning phase
+        if (allPlayerSelections.Count == 3 && currentPhase == GamePhase.Planning)
         {
             if (PhotonNetwork.IsMasterClient)
             {
@@ -590,7 +598,7 @@ public class GameManager : MonoBehaviourPunCallbacks
 
     IEnumerator RevealAndResolve()
     {
-        
+
         yield return new WaitForSeconds(1f);
 
         // Reveal all cards
