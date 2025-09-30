@@ -80,7 +80,7 @@ public class CardData : MonoBehaviour
         Card wall = new Card("Wall", CardType.Blue, wallSprite, 2);
         wall.effects[CardType.Green] = new CardEffect { gain = 1, bank = 1 };
         wall.effects[CardType.Blue] = new CardEffect { gain = 1, bank = 1 };
-        wall.effects[CardType.Red] = new CardEffect { gain = 1, bank = 1, steal = 1 };
+        wall.effects[CardType.Red] = new CardEffect { steal = 1 , bank = 1};
         wall.effects[CardType.Yellow] = new CardEffect { gain = 1, bank = 1 };
         allCards[2] = wall;
 

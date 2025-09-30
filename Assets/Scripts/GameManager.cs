@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using Photon.Pun;
@@ -26,26 +26,47 @@ public class GameManager : MonoBehaviourPunCallbacks
     public int botCount = 0;
     private bool[] isBot = new bool[3];
 
-    [Header("Player Hand")]
-    public List<Image> handCards; // Card_0, Card_1, etc.
+    [Header("Player Area")]
+    public List<Image> handCards;
     public List<Card> playerHand;
+    public Image playerLeftCard;   // Card YOU played to left neighbor
+    public Image playerRightCard;  // Card YOU played to right neighbor
 
-    [Header("Neighbor Areas")]
+    [Header("Left Neighbor Display")]
     public TextMeshProUGUI leftPlayerName;
     public TextMeshProUGUI leftPlayerStats;
-    public Image leftCardPlayed;
-    public Image leftCardPlayed2;
+    public Image leftPlayerLeftCard;   // Left neighbor's card to THEIR left
+    public Image leftPlayerRightCard;
 
+    [Header("Right Neighbor Display")]
     public TextMeshProUGUI rightPlayerName;
     public TextMeshProUGUI rightPlayerStats;
-    public Image rightCardPlayed;
-    public Image rightCardPlayed2;
+    public Image rightPlayerLeftCard;   // Right neighbor's card to THEIR left (facing you)
+    public Image rightPlayerRightCard;
 
     [Header("Resources")]
     public int turnips = 1;
     public int bank = 1;
     public int bankLimit = 5;
     public int relics = 0;
+
+    [Header("Card Selections")]
+    private Dictionary<int, CardSelection> allPlayerSelections = new Dictionary<int, CardSelection>();
+
+    [System.Serializable]
+    public class CardSelection
+    {
+        public int playerId;
+        public int leftCardId;
+        public int rightCardId;
+        public Card leftCard;
+        public Card rightCard;
+    }
+
+    [Header("Player Resources")]
+    private int[] playerTurnips = new int[3] { 1, 1, 1 };  // All start with 1 turnip
+    private int[] playerBank = new int[3] { 1, 1, 1 };     // All start with 1 in bank
+    private int[] playerRelics = new int[3] { 0, 0, 0 };
 
     private Card selectedLeftCard;
     private Card selectedRightCard;
@@ -222,7 +243,7 @@ public class GameManager : MonoBehaviourPunCallbacks
         if (selectedLeftCard == playerHand[cardIndex])
         {
             selectedLeftCard = null;
-            leftCardPlayed2.gameObject.SetActive(false);
+            playerLeftCard.gameObject.SetActive(false);
             handCards[cardIndex].color = Color.white;
             Debug.Log("Deselected left card");
             return;
@@ -236,9 +257,9 @@ public class GameManager : MonoBehaviourPunCallbacks
             selectedRightCard = null;
 
             // Update visuals
-            leftCardPlayed2.sprite = selectedLeftCard.cardSprite;
-            leftCardPlayed2.gameObject.SetActive(true);
-            rightCardPlayed2.gameObject.SetActive(false);
+            playerLeftCard.sprite = selectedLeftCard.cardSprite;
+            playerLeftCard.gameObject.SetActive(true);
+            playerRightCard.gameObject.SetActive(false);
 
             Debug.Log($"Swapped {selectedLeftCard.cardName} from right to left");
             return;
@@ -258,9 +279,9 @@ public class GameManager : MonoBehaviourPunCallbacks
         }
 
         selectedLeftCard = playerHand[cardIndex];
-        leftCardPlayed2.sprite = selectedLeftCard.cardSprite;
-        leftCardPlayed2.color = Color.white;
-        leftCardPlayed2.gameObject.SetActive(true);
+        playerLeftCard.sprite = selectedLeftCard.cardSprite;
+        playerLeftCard.color = Color.white;
+        playerLeftCard.gameObject.SetActive(true);
         handCards[cardIndex].color = new Color(1, 1, 1, 0.3f);
 
         Debug.Log($"Selected {selectedLeftCard.cardName} for LEFT neighbor");
@@ -275,7 +296,7 @@ public class GameManager : MonoBehaviourPunCallbacks
         if (selectedRightCard == playerHand[cardIndex])
         {
             selectedRightCard = null;
-            rightCardPlayed2.gameObject.SetActive(false);
+            playerRightCard.gameObject.SetActive(false);
             handCards[cardIndex].color = Color.white;
             Debug.Log("Deselected right card");
             return;
@@ -289,9 +310,9 @@ public class GameManager : MonoBehaviourPunCallbacks
             selectedLeftCard = null;
 
             // Update visuals
-            rightCardPlayed2.sprite = selectedRightCard.cardSprite;
-            rightCardPlayed2.gameObject.SetActive(true);
-            leftCardPlayed2.gameObject.SetActive(false);
+            playerRightCard.sprite = selectedRightCard.cardSprite;
+            playerRightCard.gameObject.SetActive(true);
+            playerLeftCard.gameObject.SetActive(false);
 
             Debug.Log($"Swapped {selectedRightCard.cardName} from left to right");
             return;
@@ -311,9 +332,9 @@ public class GameManager : MonoBehaviourPunCallbacks
         }
 
         selectedRightCard = playerHand[cardIndex];
-        rightCardPlayed2.sprite = selectedRightCard.cardSprite;
-        rightCardPlayed2.color = Color.white;
-        rightCardPlayed2.gameObject.SetActive(true);
+        playerRightCard.sprite = selectedRightCard.cardSprite;
+        playerRightCard.color = Color.white;
+        playerRightCard.gameObject.SetActive(true);
         handCards[cardIndex].color = new Color(1, 1, 1, 0.3f);
 
         Debug.Log($"Selected {selectedRightCard.cardName} for RIGHT neighbor");
@@ -330,6 +351,32 @@ public class GameManager : MonoBehaviourPunCallbacks
         if (Input.GetKeyDown(KeyCode.Space) && currentPhase == GamePhase.Waiting)
         {
             InitializeGame();
+        }
+
+        if (Input.GetKeyDown(KeyCode.R) && currentPhase == GamePhase.Planning && HasSelectedBothCards())
+        {
+            // First, submit our own cards
+            SubmitCards();
+
+            // Then simulate the OTHER two players only
+            if (playerPosition == 0)
+            {
+                // We are player 0, simulate players 1 and 2
+                photonView.RPC("ReceiveCardSelection", RpcTarget.All, 2, 2, 4); // Player 1: Wall left, Merchant right
+                photonView.RPC("ReceiveCardSelection", RpcTarget.All, 3, 3, 1); // Player 2: Raider left, Farmer right
+            }
+            else if (playerPosition == 1)
+            {
+                // We are player 1, simulate players 0 and 2
+                photonView.RPC("ReceiveCardSelection", RpcTarget.All, 1, 1, 3); // Player 0: Farmer left, Raider right
+                photonView.RPC("ReceiveCardSelection", RpcTarget.All, 3, 3, 1); // Player 2: Raider left, Farmer right
+            }
+            else
+            {
+                // We are player 2, simulate players 0 and 1
+                photonView.RPC("ReceiveCardSelection", RpcTarget.All, 1, 1, 3); // Player 0: Farmer left, Raider right
+                photonView.RPC("ReceiveCardSelection", RpcTarget.All, 2, 2, 4); // Player 1: Wall left, Merchant right
+            }
         }
 
         // Update phase text based on card selection
@@ -382,10 +429,59 @@ public class GameManager : MonoBehaviourPunCallbacks
     {
         int playerPos = playerActorNumber - 1; // Convert to 0,1,2
 
-        Debug.Log($"Player {playerPos} played Left:{leftCardId} Right:{rightCardId}");
+        Debug.Log($"Player {playerPos} played Left:{CardData.Instance.GetCard(leftCardId).cardName} Right:{CardData.Instance.GetCard(rightCardId).cardName}");
 
-        // Store selections for resolution phase
-        // We'll implement this next
+        // Store selection
+        CardSelection selection = new CardSelection();
+        selection.playerId = playerPos;
+        selection.leftCardId = leftCardId;
+        selection.rightCardId = rightCardId;
+        selection.leftCard = CardData.Instance.GetCard(leftCardId);
+        selection.rightCard = CardData.Instance.GetCard(rightCardId);
+
+        allPlayerSelections[playerPos] = selection;
+
+        // Display opponent cards in UI
+        DisplayOpponentCards(playerPos, leftCardId, rightCardId);
+
+        // Check if all players have submitted
+        if (allPlayerSelections.Count == 3)
+        {
+            if (PhotonNetwork.IsMasterClient)
+            {
+                photonView.RPC("StartRevealPhase", RpcTarget.All);
+            }
+        }
+    }
+
+    void DisplayOpponentCards(int playerPos, int leftCardId, int rightCardId)
+    {
+        // Determine which neighbor areas to update based on who played
+        int leftNeighborPos = (playerPosition + 2) % 3;
+        int rightNeighborPos = (playerPosition + 1) % 3;
+
+        if (playerPos == leftNeighborPos)
+        {
+            // This is our left neighbor
+            // They played rightCardId against us (their right is our left)
+            leftPlayerRightCard.sprite = CardData.Instance.cardBackSprite;
+            leftPlayerRightCard.gameObject.SetActive(true);
+
+            // They played leftCardId against the other player
+            leftPlayerLeftCard.sprite = CardData.Instance.cardBackSprite;
+            leftPlayerLeftCard.gameObject.SetActive(true);
+        }
+        else if (playerPos == rightNeighborPos)
+        {
+            // This is our right neighbor  
+            // They played leftCardId against us (their left is our right)
+            rightPlayerLeftCard.sprite = CardData.Instance.cardBackSprite;
+            rightPlayerLeftCard.gameObject.SetActive(true);
+
+            // They played rightCardId against the other player
+            rightPlayerRightCard.sprite = CardData.Instance.cardBackSprite;
+            rightPlayerRightCard.gameObject.SetActive(true);
+        }
     }
 
     public void SortHand()
@@ -416,7 +512,7 @@ public class GameManager : MonoBehaviourPunCallbacks
             }
 
             selectedLeftCard = null;
-            leftCardPlayed2.gameObject.SetActive(false);
+            playerLeftCard.gameObject.SetActive(false);
             Debug.Log("Returned left card to hand");
         }
         else if (!isLeft && selectedRightCard != null)
@@ -432,7 +528,7 @@ public class GameManager : MonoBehaviourPunCallbacks
             }
 
             selectedRightCard = null;
-            rightCardPlayed2.gameObject.SetActive(false);
+            playerRightCard.gameObject.SetActive(false);
             Debug.Log("Returned right card to hand");
         }
 
@@ -454,7 +550,7 @@ public class GameManager : MonoBehaviourPunCallbacks
         if (selectedLeftCard == card)
         {
             selectedLeftCard = null;
-            leftCardPlayed2.gameObject.SetActive(false);
+            playerLeftCard.gameObject.SetActive(false);
             handCards[cardIndex].color = Color.white;
             Debug.Log("Returned left card to hand via click");
         }
@@ -462,7 +558,7 @@ public class GameManager : MonoBehaviourPunCallbacks
         else if (selectedRightCard == card)
         {
             selectedRightCard = null;
-            rightCardPlayed2.gameObject.SetActive(false);
+            playerRightCard.gameObject.SetActive(false);
             handCards[cardIndex].color = Color.white;
             Debug.Log("Returned right card to hand via click");
         }
@@ -476,5 +572,205 @@ public class GameManager : MonoBehaviourPunCallbacks
 
         SortHand();
         UpdateHandDisplay();
+    }
+
+    [PunRPC]
+    void StartRevealPhase()
+    {
+        Debug.Log("___StartRevealPhase called");
+        currentPhase = GamePhase.Revealing;
+        phaseText.text = "REVEALING...";
+        phaseText.color = Color.white;
+
+        StartCoroutine(RevealAndResolve());
+    }
+
+    IEnumerator RevealAndResolve()
+    {
+        
+        yield return new WaitForSeconds(1f);
+
+        // Reveal all cards
+        RevealAllCards();
+
+        yield return new WaitForSeconds(2f);
+
+        // Start resolution
+        currentPhase = GamePhase.Resolving;
+        phaseText.text = "RESOLVING...";
+        phaseText.color = Color.magenta;
+
+        // Resolve in order: Green → Blue → Red → Yellow
+        ResolveCardEffects();
+
+        yield return new WaitForSeconds(3f);
+
+        // Check for victory
+        CheckVictoryCondition();
+
+        // Start next round
+        if (PhotonNetwork.IsMasterClient)
+        {
+            photonView.RPC("StartRefreshPhase", RpcTarget.All);
+        }
+    }
+
+    void RevealAllCards()
+    {
+        // Show actual cards instead of backs
+        int leftNeighborPos = (playerPosition + 2) % 3;
+        int rightNeighborPos = (playerPosition + 1) % 3;
+
+        if (allPlayerSelections.ContainsKey(leftNeighborPos))
+        {
+            var leftNeighborCards = allPlayerSelections[leftNeighborPos];
+            // Their right card was played against us
+            leftPlayerRightCard.sprite = CardData.Instance.GetCard(leftNeighborCards.rightCardId).cardSprite;
+            // Their left card was played against the other player
+            leftPlayerLeftCard.sprite = CardData.Instance.GetCard(leftNeighborCards.leftCardId).cardSprite;
+        }
+
+        if (allPlayerSelections.ContainsKey(rightNeighborPos))
+        {
+            var rightNeighborCards = allPlayerSelections[rightNeighborPos];
+            // Their left card was played against us
+            rightPlayerLeftCard.sprite = CardData.Instance.GetCard(rightNeighborCards.leftCardId).cardSprite;
+            // Their right card was played against the other player
+            rightPlayerRightCard.sprite = CardData.Instance.GetCard(rightNeighborCards.rightCardId).cardSprite;
+        }
+    }
+
+    void ResolveCardEffects()
+    {
+        Debug.Log("ResolveCardEffects called");
+        // For each player, resolve their cards against neighbors
+        for (int i = 0; i < 3; i++)
+        {
+            if (!allPlayerSelections.ContainsKey(i)) continue;
+
+            var playerCards = allPlayerSelections[i];
+            int leftTarget = (i + 2) % 3;  // Player to the left
+            int rightTarget = (i + 1) % 3; // Player to the right
+
+            // Resolve left card against left neighbor
+            if (allPlayerSelections.ContainsKey(leftTarget))
+            {
+                var opponentCard = allPlayerSelections[leftTarget].rightCard; // Their right faces our left
+                ApplyCardEffect(i, leftTarget, playerCards.leftCard, opponentCard);
+            }
+
+            // Resolve right card against right neighbor
+            if (allPlayerSelections.ContainsKey(rightTarget))
+            {
+                var opponentCard = allPlayerSelections[rightTarget].leftCard; // Their left faces our right
+                ApplyCardEffect(i, rightTarget, playerCards.rightCard, opponentCard);
+            }
+        }
+
+        // Update UI for local player
+        UpdateResourceDisplay();
+    }
+
+    void ApplyCardEffect(int playerId, int targetId, Card myCard, Card opponentCard)
+    {
+        if (myCard == null || opponentCard == null) return;
+
+        var effect = myCard.effects[opponentCard.type];
+
+        // Apply gains
+        if (effect.gain > 0)
+        {
+            playerTurnips[playerId] += effect.gain;
+            Debug.Log($"Player {playerId} gains {effect.gain} turnips with {myCard.cardName}");
+        }
+
+        // Apply steals
+        if (effect.steal > 0)
+        {
+            int stolen = Mathf.Min(effect.steal, playerTurnips[targetId]);
+            playerTurnips[targetId] -= stolen;
+            playerTurnips[playerId] += stolen;
+            Debug.Log($"Player {playerId} steals {stolen} from Player {targetId} with {myCard.cardName}");
+        }
+
+        // Apply banking
+        if (effect.bank > 0)
+        {
+            int toBank = Mathf.Min(effect.bank, playerTurnips[playerId]);
+            toBank = Mathf.Min(toBank, bankLimit - playerBank[playerId]);
+            playerTurnips[playerId] -= toBank;
+            playerBank[playerId] += toBank;
+            Debug.Log($"Player {playerId} banks {toBank} with {myCard.cardName}");
+        }
+    }
+
+    void UpdateResourceDisplay()
+    {
+        turnips = playerTurnips[playerPosition];
+        bank = playerBank[playerPosition];
+        relics = playerRelics[playerPosition];
+        UpdateUI();
+    }
+
+    void CheckVictoryCondition()
+    {
+        // Check if any player has 3 relics
+        for (int i = 0; i < 3; i++)
+        {
+            if (playerRelics[i] >= 3)
+            {
+                if (PhotonNetwork.IsMasterClient)
+                {
+                    photonView.RPC("GameOver", RpcTarget.All, i);
+                }
+                return;
+            }
+        }
+    }
+
+    [PunRPC]
+    void GameOver(int winnerId)
+    {
+        currentPhase = GamePhase.Waiting;
+        phaseText.text = winnerId == playerPosition ? "YOU WIN!" : $"Player {winnerId + 1} Wins!";
+        phaseText.color = winnerId == playerPosition ? Color.green : Color.red;
+
+        // TODO: Show final scores, rematch button, etc.
+    }
+
+    [PunRPC]
+    void StartRefreshPhase()
+    {
+        currentPhase = GamePhase.Refresh;
+        phaseText.text = "PREPARING NEXT ROUND...";
+        phaseText.color = Color.gray;
+
+        // Clear selections for next round
+        allPlayerSelections.Clear();
+
+        // Reset card visuals
+        leftPlayerLeftCard.gameObject.SetActive(false);
+        leftPlayerRightCard.gameObject.SetActive(false);
+        rightPlayerLeftCard.gameObject.SetActive(false);
+        rightPlayerRightCard.gameObject.SetActive(false);
+        playerLeftCard.gameObject.SetActive(false);
+        playerRightCard.gameObject.SetActive(false);
+
+        selectedLeftCard = null;
+        selectedRightCard = null;
+
+        // Update hand display
+        UpdateHandDisplay();
+
+        // Start next planning phase after delay
+        if (PhotonNetwork.IsMasterClient)
+        {
+            Invoke("StartNextRound", 2f);
+        }
+    }
+
+    void StartNextRound()
+    {
+        photonView.RPC("StartPlanningPhase", RpcTarget.All);
     }
 }

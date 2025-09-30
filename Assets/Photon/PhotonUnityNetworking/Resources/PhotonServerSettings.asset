@@ -40,6 +40,9 @@ MonoBehaviour:
   - StartPlanningPhase
   - StartGameWithBots
   - ReceiveCardSelection
+  - GameOver
+  - StartRefreshPhase
+  - StartRevealPhase
   DisableAutoOpenWizard: 1
   ShowSettings: 1
   DevRegionSetOnce: 0
