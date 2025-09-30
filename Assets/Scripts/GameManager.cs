@@ -427,6 +427,9 @@ public class GameManager : MonoBehaviourPunCallbacks
     [PunRPC]
     void ReceiveCardSelection(int playerActorNumber, int leftCardId, int rightCardId)
     {
+
+        if (currentPhase != GamePhase.Planning) return;
+
         int playerPos = playerActorNumber - 1; // Convert to 0,1,2
 
         Debug.Log($"Player {playerPos} played Left:{CardData.Instance.GetCard(leftCardId).cardName} Right:{CardData.Instance.GetCard(rightCardId).cardName}");
