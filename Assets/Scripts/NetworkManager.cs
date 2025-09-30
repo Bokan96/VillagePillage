@@ -43,7 +43,7 @@ public class NetworkManager : MonoBehaviourPunCallbacks
         joinRoomBtn.onClick.AddListener(JoinRoom);
         leaveBtn.onClick.AddListener(LeaveRoom);
 
-        roomCodeInput.characterLimit = 5;
+        roomCodeInput.characterLimit = 3;
         roomCodeInput.contentType = TMP_InputField.ContentType.Alphanumeric;
         roomCodeInput.onValueChanged.AddListener(delegate {
             roomCodeInput.text = roomCodeInput.text.ToUpper();
@@ -86,15 +86,16 @@ public class NetworkManager : MonoBehaviourPunCallbacks
     void LeaveRoom()
     {
         PhotonNetwork.LeaveRoom();
+        PhotonNetwork.Disconnect();
         ShowScreen("connecting");
         connectingText.text = "Leaving...";
     }
 
     string GenerateRoomCode()
     {
-        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
         string code = "";
-        for (int i = 0; i < 5; i++)
+        for (int i = 0; i < 3; i++)
             code += chars[Random.Range(0, chars.Length)];
         return code;
     }
@@ -115,22 +116,40 @@ public class NetworkManager : MonoBehaviourPunCallbacks
 
     public override void OnJoinedRoom()
     {
-        ShowScreen("game");
-        roomCodeText.text = "Room: " + roomCode;
+        Debug.Log($"Joined room: {PhotonNetwork.CurrentRoom.Name}");
 
-        // Check if we should start with bots
+        // Calculate how many human players we need
         int botsNeeded = 0;
         if (useBot1) botsNeeded++;
         if (useBot2) botsNeeded++;
-
         int humansNeeded = 3 - botsNeeded;
 
+        // Show waiting screen with status
+        ShowScreen("connecting");
+        UpdateWaitingStatus(humansNeeded);
+
+        // Start game if enough players
         if (PhotonNetwork.CurrentRoom.PlayerCount >= humansNeeded)
         {
             if (PhotonNetwork.IsMasterClient)
             {
                 photonView.RPC("StartGameWithBots", RpcTarget.All, botsNeeded);
             }
+        }
+    }
+
+    void UpdateWaitingStatus(int humansNeeded)
+    {
+        int currentPlayers = PhotonNetwork.CurrentRoom.PlayerCount;
+        int playersNeeded = humansNeeded - currentPlayers;
+
+        if (playersNeeded > 0)
+        {
+            connectingText.text = $"Waiting for {playersNeeded} player{(playersNeeded > 1 ? "s" : "")}...\n\nRoom Code: {roomCode}";
+        }
+        else
+        {
+            connectingText.text = $"Starting game...\n\nRoom Code: {roomCode}";
         }
     }
 
@@ -144,20 +163,54 @@ public class NetworkManager : MonoBehaviourPunCallbacks
 
     public override void OnLeftRoom()
     {
-        ShowScreen("menu");
+        ShowScreen("connecting");
+        connectingText.text = "Reconnecting...";
+        PhotonNetwork.ConnectUsingSettings();
+    }
+
+    public override void OnDisconnected(DisconnectCause cause)
+    {
+        Debug.Log($"Disconnected: {cause}");
+        ShowScreen("connecting");
+        connectingText.text = "Reconnecting...";
+        PhotonNetwork.ConnectUsingSettings();
     }
 
     public override void OnPlayerEnteredRoom(Player newPlayer)
     {
-        if (PhotonNetwork.CurrentRoom.PlayerCount == 3 && PhotonNetwork.IsMasterClient)
+        Debug.Log($"Player entered: {newPlayer.NickName}");
+
+        // Update waiting status
+        int botsNeeded = 0;
+        if (useBot1) botsNeeded++;
+        if (useBot2) botsNeeded++;
+        int humansNeeded = 3 - botsNeeded;
+
+        UpdateWaitingStatus(humansNeeded);
+
+        // Start game if enough players
+        if (PhotonNetwork.CurrentRoom.PlayerCount >= humansNeeded && PhotonNetwork.IsMasterClient)
         {
-            photonView.RPC("StartGame", RpcTarget.All);
+            // Small delay before starting
+            Invoke("StartGameDelayed", 1f);
         }
+    }
+
+    void StartGameDelayed()
+    {
+        int botsNeeded = 0;
+        if (useBot1) botsNeeded++;
+        if (useBot2) botsNeeded++;
+
+        photonView.RPC("StartGameWithBots", RpcTarget.All, botsNeeded);
     }
 
     [PunRPC]
     void StartGame()
     {
+        ShowScreen("game");
+        roomCodeText.text = "Room: " + roomCode;
+
         if (GameManager.Instance != null)
             GameManager.Instance.InitializeGame();
     }
@@ -165,6 +218,9 @@ public class NetworkManager : MonoBehaviourPunCallbacks
     [PunRPC]
     void StartGameWithBots(int botCount)
     {
+        ShowScreen("game");
+        roomCodeText.text = "Room: " + roomCode;
+
         if (GameManager.Instance != null)
         {
             GameManager.Instance.InitializeGameWithBots(botCount);
