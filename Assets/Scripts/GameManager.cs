@@ -31,7 +31,7 @@ public class GameManager : MonoBehaviourPunCallbacks
     [Header("Player Area")]
     public GameObject handCardPrefab; // Prefab for hand card UI
     public Transform handContainer; // Parent container for hand cards
-    private List<GameObject> handCardObjects = new List<GameObject>(); // Instantiated card objects
+    public List<GameObject> handCardObjects = new List<GameObject>(); // Instantiated card objects
     public List<Card> playerHand;
     public Image playerLeftCard;   // Card YOU played to left neighbor
     public Image playerRightCard;  // Card YOU played to right neighbor
@@ -64,7 +64,7 @@ public class GameManager : MonoBehaviourPunCallbacks
     private int[] relicCosts = new int[] { 8, 9, 10 };
 
     [Header("Card Selections")]
-    private Dictionary<int, CardSelection> allPlayerSelections = new Dictionary<int, CardSelection>();
+    public Dictionary<int, CardSelection> allPlayerSelections = new Dictionary<int, CardSelection>();
 
     [System.Serializable]
     public class CardSelection
@@ -81,8 +81,8 @@ public class GameManager : MonoBehaviourPunCallbacks
     private int[] playerBank = new int[3] { 1, 1, 1 };     // All start with 1 in bank
     private int[] playerRelics = new int[3] { 0, 0, 0 };
 
-    private Card selectedLeftCard;
-    private Card selectedRightCard;
+    public Card selectedLeftCard;
+    public Card selectedRightCard;
 
     public enum GamePhase
     {
@@ -235,6 +235,12 @@ public class GameManager : MonoBehaviourPunCallbacks
         // Create new card objects for each card in hand
         for (int i = 0; i < playerHand.Count; i++)
         {
+            // Skip cards that are currently selected/played
+            if (selectedLeftCard == playerHand[i] || selectedRightCard == playerHand[i])
+            {
+                continue;
+            }
+
             // Instantiate card prefab
             GameObject cardObj = Instantiate(handCardPrefab, handContainer);
             cardObj.name = $"Card_{i}";
@@ -249,13 +255,9 @@ public class GameManager : MonoBehaviourPunCallbacks
             {
                 cardImage.color = Color.gray;
             }
-            else if (selectedLeftCard == playerHand[i] || selectedRightCard == playerHand[i])
-            {
-                cardImage.color = new Color(1, 1, 1, 0.3f); // Dimmed if selected
-            }
             else
             {
-                cardImage.color = Color.white; // Normal
+                cardImage.color = Color.white;
             }
 
             // Ensure CardInteractionHandler is present
@@ -624,32 +626,12 @@ public class GameManager : MonoBehaviourPunCallbacks
     {
         if (isLeft && selectedLeftCard != null)
         {
-            // Reset visual for the card in hand
-            for (int i = 0; i < playerHand.Count; i++)
-            {
-                if (playerHand[i] == selectedLeftCard && i < handCardObjects.Count)
-                {
-                    handCardObjects[i].GetComponent<Image>().color = Color.white;
-                    break;
-                }
-            }
-
             selectedLeftCard = null;
             playerLeftCard.gameObject.SetActive(false);
             Debug.Log("Returned left card to hand");
         }
         else if (!isLeft && selectedRightCard != null)
         {
-            // Reset visual for the card in hand
-            for (int i = 0; i < playerHand.Count; i++)
-            {
-                if (playerHand[i] == selectedRightCard && i < handCardObjects.Count)
-                {
-                    handCardObjects[i].GetComponent<Image>().color = Color.white;
-                    break;
-                }
-            }
-
             selectedRightCard = null;
             playerRightCard.gameObject.SetActive(false);
             Debug.Log("Returned right card to hand");
@@ -659,6 +641,47 @@ public class GameManager : MonoBehaviourPunCallbacks
         {
             phaseText.text = "PLANNING PHASE";
             phaseText.color = Color.yellow;
+        }
+
+        SortHand();
+        UpdateHandDisplay();
+    }
+
+    IEnumerator FadeInCardToHand()
+    {
+        yield return new WaitForSeconds(0.1f); // Small delay before fade in
+        UpdateHandDisplay();
+
+        // Find the newly created card and fade it in from below
+        if (handCardObjects.Count > 0)
+        {
+            GameObject lastCard = handCardObjects[handCardObjects.Count - 1];
+            CanvasGroup cg = lastCard.GetComponent<CanvasGroup>();
+            if (cg == null) cg = lastCard.AddComponent<CanvasGroup>();
+
+            RectTransform rt = lastCard.GetComponent<RectTransform>();
+            Vector3 targetPos = rt.localPosition;
+            Vector3 startPos = targetPos + new Vector3(0, -100, 0); // Start from below
+
+            cg.alpha = 0f;
+            rt.localPosition = startPos;
+
+            float duration = 0.3f;
+            float elapsed = 0f;
+
+            while (elapsed < duration)
+            {
+                elapsed += Time.deltaTime;
+                float progress = elapsed / duration;
+
+                cg.alpha = Mathf.Lerp(0f, 1f, progress);
+                rt.localPosition = Vector3.Lerp(startPos, targetPos, progress);
+
+                yield return null;
+            }
+
+            cg.alpha = 1f;
+            rt.localPosition = targetPos;
         }
     }
 
@@ -674,8 +697,6 @@ public class GameManager : MonoBehaviourPunCallbacks
         {
             selectedLeftCard = null;
             playerLeftCard.gameObject.SetActive(false);
-            if (cardIndex < handCardObjects.Count)
-                handCardObjects[cardIndex].GetComponent<Image>().color = Color.white;
             Debug.Log("Returned left card to hand via click");
         }
         // Check if this card is selected for right
@@ -683,8 +704,6 @@ public class GameManager : MonoBehaviourPunCallbacks
         {
             selectedRightCard = null;
             playerRightCard.gameObject.SetActive(false);
-            if (cardIndex < handCardObjects.Count)
-                handCardObjects[cardIndex].GetComponent<Image>().color = Color.white;
             Debug.Log("Returned right card to hand via click");
         }
 
@@ -1074,6 +1093,7 @@ public class GameManager : MonoBehaviourPunCallbacks
         playerLeftCard.gameObject.SetActive(false);
         playerRightCard.gameObject.SetActive(false);
 
+        // Clear selected cards
         selectedLeftCard = null;
         selectedRightCard = null;
 
@@ -1083,7 +1103,16 @@ public class GameManager : MonoBehaviourPunCallbacks
             card.isExhausted = false;
         }
 
-        // Update hand display
+        // Force rebuild hand display
+        foreach (GameObject cardObj in handCardObjects)
+        {
+            if (cardObj != null)
+            {
+                Destroy(cardObj);
+            }
+        }
+        handCardObjects.Clear();
+
         UpdateHandDisplay();
 
         // Start next planning phase after delay

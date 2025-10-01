@@ -24,16 +24,11 @@ public class NetworkManager : MonoBehaviourPunCallbacks
     [Header("Connecting")]
     public TextMeshProUGUI connectingText;
 
-    [Header("Bot Settings")]
-    public bool useBot1 = false;
-    public bool useBot2 = false;
-
     // Add UI elements for bot buttons in Menu
     [Header("Menu UI - Bots")]
-    public Button addBot1Btn;
-    public Button addBot2Btn;
-    public TextMeshProUGUI bot1StatusText;
-    public TextMeshProUGUI bot2StatusText;
+    public Slider botCountSlider;
+    public TextMeshProUGUI botCountText;
+    private int botCount = 0;
 
     private string roomCode;
 
@@ -49,16 +44,21 @@ public class NetworkManager : MonoBehaviourPunCallbacks
             roomCodeInput.text = roomCodeInput.text.ToUpper();
         });
 
+        // Setup bot slider
+        if (botCountSlider != null)
+        {
+            botCountSlider.minValue = 0;
+            botCountSlider.maxValue = 2;
+            botCountSlider.wholeNumbers = true;
+            botCountSlider.value = 0;
+            botCountSlider.onValueChanged.AddListener(OnBotSliderChanged);
+        }
+
+        UpdateBotCountText();
+
         ShowScreen("connecting");
         connectingText.text = "Connecting to server...";
         PhotonNetwork.ConnectUsingSettings();
-
-        if (addBot1Btn != null)
-            addBot1Btn.onClick.AddListener(() => ToggleBot(1));
-        if (addBot2Btn != null)
-            addBot2Btn.onClick.AddListener(() => ToggleBot(2));
-
-        UpdateBotUI();
     }
 
     void CreateRoom()
@@ -85,11 +85,49 @@ public class NetworkManager : MonoBehaviourPunCallbacks
 
     void LeaveRoom()
     {
+        // Reset GameManager state before leaving
+        if (GameManager.Instance != null)
+        {
+            // Clear all card selections
+            GameManager.Instance.selectedLeftCard = null;
+            GameManager.Instance.selectedRightCard = null;
+
+            // Clear player hand
+            GameManager.Instance.playerHand.Clear();
+
+            // Clear hand card objects
+            foreach (GameObject cardObj in GameManager.Instance.handCardObjects)
+            {
+                Destroy(cardObj);
+            }
+            GameManager.Instance.handCardObjects.Clear();
+
+            // Reset phase
+            GameManager.Instance.currentPhase = GameManager.GamePhase.Waiting;
+
+            // Hide all played cards
+            GameManager.Instance.playerLeftCard.gameObject.SetActive(false);
+            GameManager.Instance.playerRightCard.gameObject.SetActive(false);
+            GameManager.Instance.leftPlayerLeftCard.gameObject.SetActive(false);
+            GameManager.Instance.leftPlayerRightCard.gameObject.SetActive(false);
+            GameManager.Instance.rightPlayerLeftCard.gameObject.SetActive(false);
+            GameManager.Instance.rightPlayerRightCard.gameObject.SetActive(false);
+
+            // Reset resources
+            GameManager.Instance.turnips = 1;
+            GameManager.Instance.bank = 1;
+            GameManager.Instance.relics = 0;
+
+            // Clear selections
+            GameManager.Instance.allPlayerSelections.Clear();
+        }
+
         PhotonNetwork.LeaveRoom();
-        PhotonNetwork.Disconnect();
         ShowScreen("connecting");
         connectingText.text = "Leaving...";
     }
+
+
 
     string GenerateRoomCode()
     {
@@ -118,22 +156,16 @@ public class NetworkManager : MonoBehaviourPunCallbacks
     {
         Debug.Log($"Joined room: {PhotonNetwork.CurrentRoom.Name}");
 
-        // Calculate how many human players we need
-        int botsNeeded = 0;
-        if (useBot1) botsNeeded++;
-        if (useBot2) botsNeeded++;
-        int humansNeeded = 3 - botsNeeded;
+        int humansNeeded = 3 - botCount;
 
-        // Show waiting screen with status
         ShowScreen("connecting");
         UpdateWaitingStatus(humansNeeded);
 
-        // Start game if enough players
         if (PhotonNetwork.CurrentRoom.PlayerCount >= humansNeeded)
         {
             if (PhotonNetwork.IsMasterClient)
             {
-                photonView.RPC("StartGameWithBots", RpcTarget.All, botsNeeded);
+                photonView.RPC("StartGameWithBots", RpcTarget.All, botCount);
             }
         }
     }
@@ -163,9 +195,7 @@ public class NetworkManager : MonoBehaviourPunCallbacks
 
     public override void OnLeftRoom()
     {
-        ShowScreen("connecting");
-        connectingText.text = "Reconnecting...";
-        PhotonNetwork.ConnectUsingSettings();
+        ShowScreen("menu");
     }
 
     public override void OnDisconnected(DisconnectCause cause)
@@ -180,29 +210,18 @@ public class NetworkManager : MonoBehaviourPunCallbacks
     {
         Debug.Log($"Player entered: {newPlayer.NickName}");
 
-        // Update waiting status
-        int botsNeeded = 0;
-        if (useBot1) botsNeeded++;
-        if (useBot2) botsNeeded++;
-        int humansNeeded = 3 - botsNeeded;
-
+        int humansNeeded = 3 - botCount;
         UpdateWaitingStatus(humansNeeded);
 
-        // Start game if enough players
         if (PhotonNetwork.CurrentRoom.PlayerCount >= humansNeeded && PhotonNetwork.IsMasterClient)
         {
-            // Small delay before starting
             Invoke("StartGameDelayed", 1f);
         }
     }
 
     void StartGameDelayed()
     {
-        int botsNeeded = 0;
-        if (useBot1) botsNeeded++;
-        if (useBot2) botsNeeded++;
-
-        photonView.RPC("StartGameWithBots", RpcTarget.All, botsNeeded);
+        photonView.RPC("StartGameWithBots", RpcTarget.All, botCount);
     }
 
     [PunRPC]
@@ -227,30 +246,17 @@ public class NetworkManager : MonoBehaviourPunCallbacks
         }
     }
 
-    void ToggleBot(int botNumber)
+    void OnBotSliderChanged(float value)
     {
-        if (botNumber == 1)
-        {
-            useBot1 = !useBot1;
-        }
-        else if (botNumber == 2)
-        {
-            useBot2 = !useBot2;
-            if (useBot2) useBot1 = true; // Force bot 1 if bot 2 is enabled
-        }
-        UpdateBotUI();
+        botCount = (int)value;
+        UpdateBotCountText();
     }
 
-    void UpdateBotUI()
+    void UpdateBotCountText()
     {
-        if (bot1StatusText)
-            bot1StatusText.text = useBot1 ? "Bot 1: ON" : "Bot 1: OFF";
-        if (bot2StatusText)
-            bot2StatusText.text = useBot2 ? "Bot 2: ON" : "Bot 2: OFF";
-
-        if (addBot1Btn)
-            addBot1Btn.GetComponentInChildren<TextMeshProUGUI>().text = useBot1 ? "Remove Bot 1" : "Add Bot 1";
-        if (addBot2Btn)
-            addBot2Btn.GetComponentInChildren<TextMeshProUGUI>().text = useBot2 ? "Remove Bot 2" : "Add Bot 2";
+        if (botCountText != null)
+        {
+            botCountText.text = $"Number of bots: {botCount}";
+        }
     }
 }
