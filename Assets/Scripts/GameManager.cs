@@ -136,24 +136,30 @@ public class GameManager : MonoBehaviourPunCallbacks
 
     void InitializeMarket()
     {
-        // Create market deck with 2 copies of each market card (IDs 5-9)
-        marketDeck = new List<int>();
-        for (int cardId = 5; cardId <= 9; cardId++)
+        // Only master client creates and shuffles the deck
+        if (PhotonNetwork.IsMasterClient)
         {
-            for (int copy = 0; copy < 2; copy++)
+            // Create market deck with 2 copies of each market card (IDs 5-9)
+            List<int> deck = new List<int>();
+            for (int cardId = 5; cardId <= 9; cardId++)
             {
-                marketDeck.Add(cardId);
+                for (int copy = 0; copy < 2; copy++)
+                {
+                    deck.Add(cardId);
+                }
             }
-        }
 
-        // Shuffle market deck
-        ShuffleMarketDeck();
+            // Shuffle
+            for (int i = deck.Count - 1; i > 0; i--)
+            {
+                int j = Random.Range(0, i + 1);
+                int temp = deck[i];
+                deck[i] = deck[j];
+                deck[j] = temp;
+            }
 
-        // Draw initial 4 cards
-        displayedMarket = new List<int>();
-        for (int i = 0; i < 4; i++)
-        {
-            DrawMarketCard();
+            // Send shuffled deck to all clients
+            photonView.RPC("ReceiveMarketDeck", RpcTarget.All, deck.ToArray());
         }
 
         // Store original scales and positions for market cards
@@ -164,19 +170,22 @@ public class GameManager : MonoBehaviourPunCallbacks
             originalMarketScales[i] = marketCardImages[i].transform.localScale;
             originalMarketPositions[i] = marketCardImages[i].transform.localPosition;
         }
-
-        UpdateMarketDisplay();
     }
 
-    void ShuffleMarketDeck()
+    [PunRPC]
+    void ReceiveMarketDeck(int[] deckArray)
     {
-        for (int i = marketDeck.Count - 1; i > 0; i--)
+        marketDeck = new List<int>(deckArray);
+
+        // Draw initial 4 cards
+        displayedMarket = new List<int>();
+        for (int i = 0; i < 4; i++)
         {
-            int j = Random.Range(0, i + 1);
-            int temp = marketDeck[i];
-            marketDeck[i] = marketDeck[j];
-            marketDeck[j] = temp;
+            DrawMarketCard();
         }
+
+        UpdateMarketDisplay();
+        Debug.Log($"Market initialized with cards: {string.Join(", ", displayedMarket)}");
     }
 
     void DrawMarketCard()
