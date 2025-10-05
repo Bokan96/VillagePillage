@@ -91,6 +91,8 @@ public class NetworkManager : MonoBehaviourPunCallbacks
             // Clear all card selections
             GameManager.Instance.selectedLeftCard = null;
             GameManager.Instance.selectedRightCard = null;
+            GameManager.Instance.selectedLeftCardObject = null;
+            GameManager.Instance.selectedRightCardObject = null;
 
             // Clear player hand
             GameManager.Instance.playerHand.Clear();

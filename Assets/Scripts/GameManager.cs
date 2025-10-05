@@ -49,12 +49,12 @@ public class GameManager : MonoBehaviourPunCallbacks
     public Image rightPlayerRightCard;
 
     [Header("Market")]
+    public Transform marketGrid; // NEW: The parent with Horizontal Layout Group
     public List<Image> marketCardImages; // 4 card slots in UI
     private List<int> marketDeck; // Deck of market card IDs
     private List<int> displayedMarket; // Currently displayed 4 cards
-    private Vector3[] originalMarketScales;
-    private Vector3[] originalMarketPositions;
-    private HashSet<int> playersPurchasedThisMarket = new HashSet<int>(); // Track who bought this phase
+    private Vector3 originalMarketScale; // NEW: Store single scale for grid
+    private HashSet<int> playersPurchasedThisMarket = new HashSet<int>();
 
     [Header("Resources")]
     public int turnips = 1;
@@ -65,6 +65,8 @@ public class GameManager : MonoBehaviourPunCallbacks
 
     [Header("Card Selections")]
     public Dictionary<int, CardSelection> allPlayerSelections = new Dictionary<int, CardSelection>();
+    public GameObject selectedLeftCardObject;
+    public GameObject selectedRightCardObject;
 
     [System.Serializable]
     public class CardSelection
@@ -162,13 +164,10 @@ public class GameManager : MonoBehaviourPunCallbacks
             photonView.RPC("ReceiveMarketDeck", RpcTarget.All, deck.ToArray());
         }
 
-        // Store original scales and positions for market cards
-        originalMarketScales = new Vector3[marketCardImages.Count];
-        originalMarketPositions = new Vector3[marketCardImages.Count];
-        for (int i = 0; i < marketCardImages.Count; i++)
+        // Store original scale of market grid
+        if (marketGrid != null)
         {
-            originalMarketScales[i] = marketCardImages[i].transform.localScale;
-            originalMarketPositions[i] = marketCardImages[i].transform.localPosition;
+            originalMarketScale = marketGrid.localScale;
         }
     }
 
@@ -225,12 +224,22 @@ public class GameManager : MonoBehaviourPunCallbacks
 
     public void UpdateHandDisplay()
     {
-        // Destroy all existing card objects
-        foreach (GameObject cardObj in handCardObjects)
+        // Destroy all existing card objects EXCEPT the ones in play
+        for (int i = handCardObjects.Count - 1; i >= 0; i--)
         {
-            Destroy(cardObj);
+            GameObject cardObj = handCardObjects[i];
+            if (cardObj != selectedLeftCardObject && cardObj != selectedRightCardObject)
+            {
+                Destroy(cardObj);
+            }
         }
         handCardObjects.Clear();
+
+        // Re-add the played cards to the list so we don't lose track
+        if (selectedLeftCardObject != null)
+            handCardObjects.Add(selectedLeftCardObject);
+        if (selectedRightCardObject != null)
+            handCardObjects.Add(selectedRightCardObject);
 
         // Create new card objects for each card in hand
         for (int i = 0; i < playerHand.Count; i++)
@@ -346,116 +355,121 @@ public class GameManager : MonoBehaviourPunCallbacks
             PhotonNetwork.LocalPlayer.ActorNumber, leftCardId, rightCardId);
     }
 
-    public void SelectCardForLeft(int cardIndex)
+    public void SelectCardForLeft(int cardIndex, GameObject cardObject)
     {
         if (cardIndex >= playerHand.Count || playerHand[cardIndex].isExhausted)
             return;
 
+        Card card = playerHand[cardIndex];
+
         // If clicking the already selected card, deselect it
-        if (selectedLeftCard == playerHand[cardIndex])
+        if (selectedLeftCard == card)
         {
             selectedLeftCard = null;
+            selectedLeftCardObject = null;
             playerLeftCard.gameObject.SetActive(false);
-            if (cardIndex < handCardObjects.Count)
-                handCardObjects[cardIndex].GetComponent<Image>().color = Color.white;
             Debug.Log("Deselected left card");
             return;
         }
 
-        // Can't use same card for both neighbors
-        if (selectedRightCard == playerHand[cardIndex])
+        // Can't use same card for both neighbors - swap
+        if (selectedRightCard == card)
         {
             // Swap: move right card to left
             selectedLeftCard = selectedRightCard;
+            selectedLeftCardObject = selectedRightCardObject;
             selectedRightCard = null;
+            selectedRightCardObject = null;
 
             // Update visuals
             playerLeftCard.sprite = selectedLeftCard.cardSprite;
             playerLeftCard.gameObject.SetActive(true);
             playerRightCard.gameObject.SetActive(false);
 
+            // Move the card object to left position
+            if (selectedLeftCardObject != null)
+            {
+                selectedLeftCardObject.transform.position = playerLeftCard.transform.position;
+            }
+
             Debug.Log($"Swapped {selectedLeftCard.cardName} from right to left");
             UpdateHandDisplay();
             return;
         }
 
-        // Clear previous selection if different card
-        if (selectedLeftCard != null)
+        // If there was a previous selection, return it to hand
+        if (selectedLeftCardObject != null && selectedLeftCardObject != cardObject)
         {
-            for (int i = 0; i < playerHand.Count; i++)
-            {
-                if (playerHand[i] == selectedLeftCard && i < handCardObjects.Count)
-                {
-                    handCardObjects[i].GetComponent<Image>().color = Color.white;
-                    break;
-                }
-            }
+            Destroy(selectedLeftCardObject);
         }
 
-        selectedLeftCard = playerHand[cardIndex];
+        selectedLeftCard = card;
+        selectedLeftCardObject = cardObject;
         playerLeftCard.sprite = selectedLeftCard.cardSprite;
         playerLeftCard.color = Color.white;
         playerLeftCard.gameObject.SetActive(true);
-        if (cardIndex < handCardObjects.Count)
-            handCardObjects[cardIndex].GetComponent<Image>().color = new Color(1, 1, 1, 0.3f);
 
         Debug.Log($"Selected {selectedLeftCard.cardName} for LEFT neighbor");
+        UpdateHandDisplay();
     }
 
-    public void SelectCardForRight(int cardIndex)
+    // Modified method
+    public void SelectCardForRight(int cardIndex, GameObject cardObject)
     {
         if (cardIndex >= playerHand.Count || playerHand[cardIndex].isExhausted)
             return;
 
+        Card card = playerHand[cardIndex];
+
         // If clicking the already selected card, deselect it
-        if (selectedRightCard == playerHand[cardIndex])
+        if (selectedRightCard == card)
         {
             selectedRightCard = null;
+            selectedRightCardObject = null;
             playerRightCard.gameObject.SetActive(false);
-            if (cardIndex < handCardObjects.Count)
-                handCardObjects[cardIndex].GetComponent<Image>().color = Color.white;
             Debug.Log("Deselected right card");
             return;
         }
 
-        // Can't use same card for both neighbors - offer to swap
-        if (selectedLeftCard == playerHand[cardIndex])
+        // Can't use same card for both neighbors - swap
+        if (selectedLeftCard == card)
         {
             // Swap: move left card to right
             selectedRightCard = selectedLeftCard;
+            selectedRightCardObject = selectedLeftCardObject;
             selectedLeftCard = null;
+            selectedLeftCardObject = null;
 
             // Update visuals
             playerRightCard.sprite = selectedRightCard.cardSprite;
             playerRightCard.gameObject.SetActive(true);
             playerLeftCard.gameObject.SetActive(false);
 
+            // Move the card object to right position
+            if (selectedRightCardObject != null)
+            {
+                selectedRightCardObject.transform.position = playerRightCard.transform.position;
+            }
+
             Debug.Log($"Swapped {selectedRightCard.cardName} from left to right");
             UpdateHandDisplay();
             return;
         }
 
-        // Clear previous selection if different card
-        if (selectedRightCard != null)
+        // If there was a previous selection, return it to hand
+        if (selectedRightCardObject != null && selectedRightCardObject != cardObject)
         {
-            for (int i = 0; i < playerHand.Count; i++)
-            {
-                if (playerHand[i] == selectedRightCard && i < handCardObjects.Count)
-                {
-                    handCardObjects[i].GetComponent<Image>().color = Color.white;
-                    break;
-                }
-            }
+            Destroy(selectedRightCardObject);
         }
 
-        selectedRightCard = playerHand[cardIndex];
+        selectedRightCard = card;
+        selectedRightCardObject = cardObject;
         playerRightCard.sprite = selectedRightCard.cardSprite;
         playerRightCard.color = Color.white;
         playerRightCard.gameObject.SetActive(true);
-        if (cardIndex < handCardObjects.Count)
-            handCardObjects[cardIndex].GetComponent<Image>().color = new Color(1, 1, 1, 0.3f);
 
         Debug.Log($"Selected {selectedRightCard.cardName} for RIGHT neighbor");
+        UpdateHandDisplay();
     }
 
     public bool HasSelectedBothCards()
@@ -833,6 +847,7 @@ public class GameManager : MonoBehaviourPunCallbacks
 
         // Update UI for local player
         UpdateResourceDisplay();
+        UpdateNeighborStats();
     }
 
     void ApplyCardEffect(int playerId, int targetId, Card myCard, Card opponentCard)
@@ -876,6 +891,18 @@ public class GameManager : MonoBehaviourPunCallbacks
         UpdateUI();
     }
 
+    void UpdateNeighborStats()
+    {
+        int leftNeighborPos = (playerPosition + 2) % 3;
+        int rightNeighborPos = (playerPosition + 1) % 3;
+
+        // Update left neighbor stats
+        leftPlayerStats.text = $"T: {playerTurnips[leftNeighborPos]} | B: {playerBank[leftNeighborPos]}/{bankLimit} | R: {playerRelics[leftNeighborPos]}/3";
+
+        // Update right neighbor stats
+        rightPlayerStats.text = $"T: {playerTurnips[rightNeighborPos]} | B: {playerBank[rightNeighborPos]}/{bankLimit} | R: {playerRelics[rightNeighborPos]}/3";
+    }
+
     [PunRPC]
     void StartMarketPhase()
     {
@@ -886,10 +913,10 @@ public class GameManager : MonoBehaviourPunCallbacks
         // Clear purchase tracking
         playersPurchasedThisMarket.Clear();
 
-        // Scale up market cards
-        for (int i = 0; i < marketCardImages.Count; i++)
+        // Scale up market grid
+        if (marketGrid != null)
         {
-            marketCardImages[i].transform.localScale = originalMarketScales[i] * 1.2f;
+            marketGrid.localScale = originalMarketScale * 1.2f;
         }
 
         StartCoroutine(ProcessMarketPurchases());
@@ -928,10 +955,10 @@ public class GameManager : MonoBehaviourPunCallbacks
             yield return StartCoroutine(ProcessPlayerPurchase(playerId));
         }
 
-        // Reset market card scales
-        for (int i = 0; i < marketCardImages.Count; i++)
+        // Reset market grid scale
+        if (marketGrid != null)
         {
-            marketCardImages[i].transform.localScale = originalMarketScales[i];
+            marketGrid.localScale = originalMarketScale;
         }
 
         // Check for victory

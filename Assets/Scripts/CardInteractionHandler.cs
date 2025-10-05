@@ -3,10 +3,11 @@ using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using System.Collections;
 using System.Collections.Generic;
+using DG.Tweening;
 
 public class CardInteractionHandler : MonoBehaviour, IPointerDownHandler, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerClickHandler
 {
-    private Vector3 originalPosition;
+    private Vector3 originalHandPosition;
     private Transform originalParent;
     private int cardIndex;
     private CanvasGroup canvasGroup;
@@ -15,12 +16,13 @@ public class CardInteractionHandler : MonoBehaviour, IPointerDownHandler, IBegin
 
     private bool isDragging = false;
     private Vector3 dragOffset = new Vector3(0, 50, 0);
+    private Tween scaleTween;
+    private bool wasInPlayArea = false;
 
     void Start()
     {
         string name = gameObject.name;
 
-        // Only parse if name matches expected format "Card_X"
         if (name.Contains("_"))
         {
             string[] parts = name.Split('_');
@@ -32,24 +34,130 @@ public class CardInteractionHandler : MonoBehaviour, IPointerDownHandler, IBegin
 
         canvasGroup = GetComponent<CanvasGroup>();
         cardImage = GetComponent<Image>();
-        originalPosition = transform.position;
+        originalHandPosition = transform.position;
         originalParent = transform.parent;
         originalSiblingIndex = transform.GetSiblingIndex();
     }
 
-    // Click to return dimmed card to hand
     public void OnPointerClick(PointerEventData eventData)
     {
-        if (isDragging) return; // Ignore clicks if we just dragged
+        if (isDragging) return;
 
         if (GameManager.Instance.currentPhase != GameManager.GamePhase.Planning)
             return;
 
-        // If card is dimmed (selected), return it to hand
-        if (cardImage.color.a < 1f)
+        if (IsCardInPlayedPosition())
         {
-            GameManager.Instance.ReturnCardToHand(cardIndex);
+            ResetCard();
         }
+    }
+
+    bool IsCardInPlayedPosition()
+    {
+        if (GameManager.Instance.selectedLeftCardObject == gameObject ||
+            GameManager.Instance.selectedRightCardObject == gameObject)
+        {
+            return true;
+        }
+        return false;
+    }
+
+    void ReturnToHandFromPlayedPosition()
+    {
+        // Determine which slot this card is in
+        bool isLeftSlot = (GameManager.Instance.selectedLeftCardObject == gameObject);
+
+        // Clear the slot reference in GameManager
+        if (isLeftSlot)
+        {
+            GameManager.Instance.selectedLeftCard = null;
+            GameManager.Instance.selectedLeftCardObject = null;
+            GameManager.Instance.playerLeftCard.gameObject.SetActive(false);
+        }
+        else
+        {
+            GameManager.Instance.selectedRightCard = null;
+            GameManager.Instance.selectedRightCardObject = null;
+            GameManager.Instance.playerRightCard.gameObject.SetActive(false);
+        }
+
+        // Update phase text
+        if (!GameManager.Instance.HasSelectedBothCards() && GameManager.Instance.currentPhase == GameManager.GamePhase.Planning)
+        {
+            GameManager.Instance.phaseText.text = "PLANNING PHASE";
+            GameManager.Instance.phaseText.color = Color.yellow;
+        }
+
+        // Sort hand and rebuild display FIRST
+        GameManager.Instance.SortHand();
+        GameManager.Instance.UpdateHandDisplay();
+
+        // Now find the position and animate
+        StartCoroutine(AnimateBackToHand());
+    }
+
+    IEnumerator AnimateBackToHand()
+    {
+        // Wait for layout to update
+        yield return null;
+        yield return null; // Extra frame to ensure layout is complete
+
+        // Find the newly created card in hand at the correct position
+        string targetName = $"Card_{cardIndex}";
+        Vector3 targetPosition = GameManager.Instance.handContainer.position; // Fallback
+        GameObject targetCard = null;
+
+        foreach (Transform child in GameManager.Instance.handContainer)
+        {
+            if (child.name == targetName && child.gameObject != gameObject)
+            {
+                targetPosition = child.position;
+                targetCard = child.gameObject;
+                Debug.Log($"Found target card at position: {targetPosition}");
+                break;
+            }
+        }
+
+        // If we found the placeholder, hide it during animation
+        if (targetCard != null)
+        {
+            targetCard.SetActive(false);
+        }
+
+        // Now animate to that position
+        float duration = 0.3f;
+        float elapsed = 0f;
+        Vector3 startPosition = transform.position;
+        Vector3 startScale = transform.localScale;
+        Quaternion startRotation = transform.rotation;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float progress = elapsed / duration;
+
+            transform.position = Vector3.Lerp(startPosition, targetPosition, progress);
+            scaleTween?.Kill();
+            transform.localScale = Vector3.Lerp(startScale, Vector3.one, progress);
+            transform.rotation = Quaternion.Lerp(startRotation, Quaternion.identity, progress);
+
+            yield return null;
+        }
+
+        transform.position = targetPosition;
+        transform.localScale = Vector3.one;
+        transform.rotation = Quaternion.identity;
+        canvasGroup.blocksRaycasts = true;
+
+        // Destroy the placeholder and this card, then rebuild hand one final time
+        if (targetCard != null)
+        {
+            Destroy(targetCard);
+        }
+
+        // Destroy this card and rebuild
+        Destroy(gameObject);
+        GameManager.Instance.UpdateHandDisplay();
     }
 
     public void OnPointerDown(PointerEventData eventData)
@@ -64,13 +172,39 @@ public class CardInteractionHandler : MonoBehaviour, IPointerDownHandler, IBegin
             return;
 
         isDragging = true;
-        originalPosition = transform.position;
+        wasInPlayArea = IsCardInPlayedPosition();
+        
 
-        // Move to canvas root so it's on top
+        if (wasInPlayArea)
+        {
+            if (GameManager.Instance.selectedLeftCardObject == gameObject)
+            {
+                GameManager.Instance.selectedLeftCard = null;
+                GameManager.Instance.selectedLeftCardObject = null;
+                GameManager.Instance.playerLeftCard.gameObject.SetActive(false);
+            }
+            else if (GameManager.Instance.selectedRightCardObject == gameObject)
+            {
+                GameManager.Instance.selectedRightCard = null;
+                GameManager.Instance.selectedRightCardObject = null;
+                GameManager.Instance.playerRightCard.gameObject.SetActive(false);
+            }
+
+            if (!GameManager.Instance.HasSelectedBothCards())
+            {
+                GameManager.Instance.phaseText.text = "PLANNING PHASE";
+                GameManager.Instance.phaseText.color = Color.yellow;
+            }
+        }
+        else
+            originalHandPosition = transform.position;
+
         transform.SetParent(transform.root);
         transform.SetAsLastSibling();
 
-        canvasGroup.alpha = 0.7f;
+        scaleTween?.Kill();
+        scaleTween = transform.DOScale(1.3f, 0.2f).SetEase(Ease.OutBack);
+
         canvasGroup.blocksRaycasts = false;
     }
 
@@ -79,16 +213,13 @@ public class CardInteractionHandler : MonoBehaviour, IPointerDownHandler, IBegin
         if (GameManager.Instance.currentPhase != GameManager.GamePhase.Planning)
             return;
 
-        // Follow mouse with offset above
         transform.position = Input.mousePosition + dragOffset;
 
-        // Calculate rotation based on x position
         float screenWidth = Screen.width;
-        float normalizedX = (transform.position.x / screenWidth) * 2f - 1f; // -1 to 1
-        float targetRotation = normalizedX * 30f; // -30 to 30 degrees
+        float normalizedX = (transform.position.x / screenWidth) * 2f - 1f;
+        float targetRotation = normalizedX * 30f;
         transform.rotation = Quaternion.Euler(0, 0, -targetRotation);
 
-        // Highlight drop zones
         CheckDropZones(eventData);
     }
 
@@ -101,7 +232,6 @@ public class CardInteractionHandler : MonoBehaviour, IPointerDownHandler, IBegin
             return;
         }
 
-        // Check what's under the CARD (not the cursor)
         PointerEventData cardPointerData = new PointerEventData(EventSystem.current);
         cardPointerData.position = transform.position;
 
@@ -111,13 +241,13 @@ public class CardInteractionHandler : MonoBehaviour, IPointerDownHandler, IBegin
         bool droppedInArea = false;
         foreach (RaycastResult result in results)
         {
-            if (result.gameObject.name == "LeftNeighborArea")
+            if (result.gameObject.name == "LeftPlayArea")
             {
                 StartCoroutine(SpinAndLandOnSlot(true, cardIndex));
                 droppedInArea = true;
                 break;
             }
-            else if (result.gameObject.name == "RightNeighborArea")
+            else if (result.gameObject.name == "RightPlayArea")
             {
                 StartCoroutine(SpinAndLandOnSlot(false, cardIndex));
                 droppedInArea = true;
@@ -131,19 +261,24 @@ public class CardInteractionHandler : MonoBehaviour, IPointerDownHandler, IBegin
         }
 
         ResetDropZoneColors();
-
-        // Reset dragging flag after a short delay to avoid click trigger
         Invoke("ResetDragFlag", 0.1f);
+    }
+
+    void ReturnToHandFromDrag()
+    {
+        GameManager.Instance.SortHand();
+        GameManager.Instance.UpdateHandDisplay();
+        StartCoroutine(AnimateBackToHand());
     }
 
     void ResetDragFlag()
     {
         isDragging = false;
+        wasInPlayArea = false;
     }
 
     void CheckDropZones(PointerEventData eventData)
     {
-        // Check what's under the card, not the cursor
         PointerEventData cardPointerData = new PointerEventData(EventSystem.current);
         cardPointerData.position = transform.position;
 
@@ -154,12 +289,12 @@ public class CardInteractionHandler : MonoBehaviour, IPointerDownHandler, IBegin
 
         foreach (RaycastResult result in results)
         {
-            if (result.gameObject.name == "LeftNeighborArea") overLeft = true;
-            if (result.gameObject.name == "RightNeighborArea") overRight = true;
+            if (result.gameObject.name == "LeftPlayArea") overLeft = true;
+            if (result.gameObject.name == "RightPlayArea") overRight = true;
         }
 
-        GameObject left = GameObject.Find("LeftNeighborArea");
-        GameObject right = GameObject.Find("RightNeighborArea");
+        GameObject left = GameObject.Find("LeftPlayArea");
+        GameObject right = GameObject.Find("RightPlayArea");
 
         if (left) left.GetComponent<Image>().color = overLeft ?
             new Color(0, 1, 0, 0.4f) : new Color(0, 0, 0, 0.3f);
@@ -167,57 +302,78 @@ public class CardInteractionHandler : MonoBehaviour, IPointerDownHandler, IBegin
             new Color(0, 1, 0, 0.4f) : new Color(0, 0, 0, 0.3f);
     }
 
+    float EaseInOutCubic(float t)
+    {
+        return t < 0.5f ? 4f * t * t * t : 1f - Mathf.Pow(-2f * t + 2f, 3f) / 2f;
+    }
+
     IEnumerator SpinAndLandOnSlot(bool isLeftSlot, int cardIdx)
     {
-        // 360 spin and move to slot position
+        // Check if target slot already has a card - if so, return that card to hand
+        GameObject existingCard = isLeftSlot ?
+            GameManager.Instance.selectedLeftCardObject :
+            GameManager.Instance.selectedRightCardObject;
+
+        if (existingCard != null && existingCard != gameObject)
+        {
+            // Return existing card to hand
+            CardInteractionHandler existingHandler = existingCard.GetComponent<CardInteractionHandler>();
+            if (existingHandler != null)
+            {
+                existingHandler.ReturnToHandFromPlayedPosition();
+            }
+
+            // Wait a bit for the animation to start
+            yield return new WaitForSeconds(0.1f);
+        }
+
         float spinDuration = 0.5f;
         float elapsed = 0f;
         Quaternion startRotation = transform.rotation;
         Vector3 startPosition = transform.position;
+        Vector3 startScale = transform.localScale;
 
-        // Get target position
         GameObject targetSlot = isLeftSlot ?
             GameManager.Instance.playerLeftCard.gameObject :
             GameManager.Instance.playerRightCard.gameObject;
         Vector3 targetPosition = targetSlot.transform.position;
 
-        // Spin and move simultaneously
         while (elapsed < spinDuration)
         {
             elapsed += Time.deltaTime;
-            float progress = elapsed / spinDuration;
+            float linearProgress = elapsed / spinDuration;
+            float easedProgress = EaseInOutCubic(linearProgress);
 
-            // Spin 360 degrees
-            float angle = Mathf.Lerp(0, 360, progress);
+            float angle = Mathf.Lerp(0, 360, easedProgress);
             transform.rotation = Quaternion.Euler(0, 0, startRotation.eulerAngles.z + angle);
+            transform.position = Vector3.Lerp(startPosition, targetPosition, easedProgress);
 
-            // Move to target position
-            transform.position = Vector3.Lerp(startPosition, targetPosition, progress);
+            scaleTween?.Kill();
+            transform.localScale = Vector3.Lerp(startScale, Vector3.one, easedProgress);
 
             yield return null;
         }
 
-        // Ensure final state
         transform.rotation = Quaternion.identity;
         transform.position = targetPosition;
+        transform.localScale = Vector3.one;
 
-        // NOW update the GameManager to show the card in the slot
         if (isLeftSlot)
         {
-            GameManager.Instance.SelectCardForLeft(cardIdx);
+            GameManager.Instance.SelectCardForLeft(cardIdx, gameObject);
         }
         else
         {
-            GameManager.Instance.SelectCardForRight(cardIdx);
+            GameManager.Instance.SelectCardForRight(cardIdx, gameObject);
         }
 
-        // Hide the dragged card
-        gameObject.SetActive(false);
+        canvasGroup.blocksRaycasts = true;
     }
 
     void ResetCard()
     {
         StopAllCoroutines();
+        ResetDragFlag();
         StartCoroutine(SmoothReturnToHand());
     }
 
@@ -227,22 +383,25 @@ public class CardInteractionHandler : MonoBehaviour, IPointerDownHandler, IBegin
         float elapsed = 0f;
         Vector3 startPosition = transform.position;
         Quaternion startRotation = transform.rotation;
+        Vector3 startScale = transform.localScale;
 
         while (elapsed < duration)
         {
             elapsed += Time.deltaTime;
             float progress = elapsed / duration;
 
-            transform.position = Vector3.Lerp(startPosition, originalPosition, progress);
+            transform.position = Vector3.Lerp(startPosition, originalHandPosition, progress);
             transform.rotation = Quaternion.Lerp(startRotation, Quaternion.identity, progress);
+            scaleTween?.Kill();
+            transform.localScale = Vector3.Lerp(startScale, Vector3.one, progress);
 
             yield return null;
         }
 
         transform.SetParent(originalParent);
-        transform.position = originalPosition;
+        transform.position = originalHandPosition;
         transform.rotation = Quaternion.identity;
-        canvasGroup.alpha = 1f;
+        transform.localScale = Vector3.one;
         canvasGroup.blocksRaycasts = true;
 
         if (GameManager.Instance != null)
@@ -253,9 +412,14 @@ public class CardInteractionHandler : MonoBehaviour, IPointerDownHandler, IBegin
 
     void ResetDropZoneColors()
     {
-        GameObject left = GameObject.Find("LeftNeighborArea");
-        GameObject right = GameObject.Find("RightNeighborArea");
+        GameObject left = GameObject.Find("LeftPlayArea");
+        GameObject right = GameObject.Find("RightPlayArea");
         if (left) left.GetComponent<Image>().color = new Color(0, 0, 0, 0.3f);
         if (right) right.GetComponent<Image>().color = new Color(0, 0, 0, 0.3f);
+    }
+
+    void OnDestroy()
+    {
+        scaleTween?.Kill();
     }
 }
