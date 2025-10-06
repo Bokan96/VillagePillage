@@ -3,6 +3,10 @@
   "WorkspaceRootPath": "D:\\Boki\\Unity Projects\\VillagePillage\\",
   "Documents": [
     {
+      "AbsoluteMoniker": "D:0:0:{CC0E1C0C-9E7B-4E79-4577-483051CAA790}|Assembly-CSharp.csproj|d:\\boki\\unity projects\\villagepillage\\assets\\scripts\\safeareahandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{CC0E1C0C-9E7B-4E79-4577-483051CAA790}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\safeareahandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{CC0E1C0C-9E7B-4E79-4577-483051CAA790}|Assembly-CSharp.csproj|d:\\boki\\unity projects\\villagepillage\\assets\\scripts\\cardinteractionhandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{CC0E1C0C-9E7B-4E79-4577-483051CAA790}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\cardinteractionhandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
@@ -27,19 +31,32 @@
             {
               "$type": "Document",
               "DocumentIndex": 0,
+              "Title": "SafeAreaHandler.cs",
+              "DocumentMoniker": "D:\\Boki\\Unity Projects\\VillagePillage\\Assets\\Scripts\\SafeAreaHandler.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\SafeAreaHandler.cs",
+              "ToolTip": "D:\\Boki\\Unity Projects\\VillagePillage\\Assets\\Scripts\\SafeAreaHandler.cs",
+              "RelativeToolTip": "Assets\\Scripts\\SafeAreaHandler.cs",
+              "ViewState": "AQIAABMAAAAAAAAAAAAQwCIAAAAwAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-10-06T20:12:21.973Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
               "Title": "CardInteractionHandler.cs",
               "DocumentMoniker": "D:\\Boki\\Unity Projects\\VillagePillage\\Assets\\Scripts\\CardInteractionHandler.cs",
               "RelativeDocumentMoniker": "Assets\\Scripts\\CardInteractionHandler.cs",
               "ToolTip": "D:\\Boki\\Unity Projects\\VillagePillage\\Assets\\Scripts\\CardInteractionHandler.cs",
               "RelativeToolTip": "Assets\\Scripts\\CardInteractionHandler.cs",
-              "ViewState": "AQIAAAsBAAAAAAAAAAAUwF0BAAAAAAAA",
+              "ViewState": "AQIAABIBAAAAAAAAAGBiwF0BAAAAAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2025-09-21T17:23:29.32Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 2,
               "Title": "GameManager.cs",
               "DocumentMoniker": "D:\\Boki\\Unity Projects\\VillagePillage\\Assets\\Scripts\\GameManager.cs",
               "RelativeDocumentMoniker": "Assets\\Scripts\\GameManager.cs",
@@ -47,12 +64,11 @@
               "RelativeToolTip": "Assets\\Scripts\\GameManager.cs",
               "ViewState": "AQIAAOIAAAAAAAAAAAAuwOAAAAAhAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-21T17:14:00.119Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-09-21T17:14:00.119Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 3,
               "Title": "NetworkManager.cs",
               "DocumentMoniker": "D:\\Boki\\Unity Projects\\VillagePillage\\Assets\\Scripts\\NetworkManager.cs",
               "RelativeDocumentMoniker": "Assets\\Scripts\\NetworkManager.cs",
@@ -60,8 +76,7 @@
               "RelativeToolTip": "Assets\\Scripts\\NetworkManager.cs",
               "ViewState": "AQIAAFQAAAAAAAAAAAAuwGMAAAAmAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-21T17:01:58.616Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-09-21T17:01:58.616Z"
             }
           ]
         }
