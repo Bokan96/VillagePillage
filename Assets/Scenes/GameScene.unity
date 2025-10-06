@@ -1812,7 +1812,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 71f61a0b60e203544984f757b6f121aa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  androidBottomPadding: 200
+  androidBottomPadding: -200
   alwaysUseFallback: 0
 --- !u!1 &768526720
 GameObject:
