@@ -324,9 +324,9 @@ public class CardInteractionHandler : MonoBehaviour, IPointerDownHandler, IBegin
         seq.Append(transform.DOMove(targetSlot.transform.position, 0.5f).SetEase(Ease.InOutCubic));
         seq.Join(transform.DORotate(new Vector3(0, 0, endZRotation), 0.5f).SetEase(Ease.InOutCubic));
         seq.Join(transform.DOScale(1f, 0.5f).SetEase(Ease.InElastic));
+        seq.SetLink(gameObject);
 
         yield return seq.WaitForCompletion();
-
         // transform.rotation = Quaternion.identity;
 
         if (isLeftSlot)
@@ -356,8 +356,11 @@ public class CardInteractionHandler : MonoBehaviour, IPointerDownHandler, IBegin
         seq.Append(transform.DOMove(originalHandPosition, 0.7f).SetEase(Ease.InOutCubic));
         seq.Join(transform.DORotate(Vector3.zero, 0.7f).SetEase(Ease.InOutCubic));
         seq.Join(transform.DOScale(1f, 0.7f).SetEase(Ease.InOutCubic));
+        seq.SetLink(gameObject); // Auto-kills tween when this GameObject is destroyed
 
+        Debug.Log("Flag5");
         yield return seq.WaitForCompletion();
+        Debug.Log("Flag6");
 
         transform.SetParent(originalParent);
         transform.position = originalHandPosition;
