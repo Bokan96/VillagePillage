@@ -45,11 +45,6 @@ public class CardInteractionHandler : MonoBehaviour, IPointerDownHandler, IBegin
 
         if (GameManager.Instance.currentPhase != GameManager.GamePhase.Planning)
             return;
-
-        if (IsCardInPlayedPosition())
-        {
-            ResetCard();
-        }
     }
 
     bool IsCardInPlayedPosition()
@@ -203,7 +198,7 @@ public class CardInteractionHandler : MonoBehaviour, IPointerDownHandler, IBegin
         transform.SetAsLastSibling();
 
         scaleTween?.Kill();
-        scaleTween = transform.DOScale(1.3f, 0.2f).SetEase(Ease.OutBack);
+        scaleTween = transform.DOScale(1.4f, 0.2f).SetEase(Ease.OutBack);
 
         canvasGroup.blocksRaycasts = false;
     }
@@ -309,54 +304,35 @@ public class CardInteractionHandler : MonoBehaviour, IPointerDownHandler, IBegin
 
     IEnumerator SpinAndLandOnSlot(bool isLeftSlot, int cardIdx)
     {
-        // Check if target slot already has a card - if so, return that card to hand
+        float endZRotation = isLeftSlot ? 25f : -25f;
+        // Check for existing card
         GameObject existingCard = isLeftSlot ?
             GameManager.Instance.selectedLeftCardObject :
             GameManager.Instance.selectedRightCardObject;
 
         if (existingCard != null && existingCard != gameObject)
         {
-            // Return existing card to hand
             CardInteractionHandler existingHandler = existingCard.GetComponent<CardInteractionHandler>();
             if (existingHandler != null)
             {
                 existingHandler.ReturnToHandFromPlayedPosition();
             }
-
-            // Wait a bit for the animation to start
             yield return new WaitForSeconds(0.1f);
         }
-
-        float spinDuration = 0.5f;
-        float elapsed = 0f;
-        Quaternion startRotation = transform.rotation;
-        Vector3 startPosition = transform.position;
-        Vector3 startScale = transform.localScale;
 
         GameObject targetSlot = isLeftSlot ?
             GameManager.Instance.playerLeftCard.gameObject :
             GameManager.Instance.playerRightCard.gameObject;
-        Vector3 targetPosition = targetSlot.transform.position;
 
-        while (elapsed < spinDuration)
-        {
-            elapsed += Time.deltaTime;
-            float linearProgress = elapsed / spinDuration;
-            float easedProgress = EaseInOutCubic(linearProgress);
+        // DOTween sequence
+        Sequence seq = DOTween.Sequence();
+        seq.Append(transform.DOMove(targetSlot.transform.position, 0.5f).SetEase(Ease.InOutCubic));
+        seq.Join(transform.DORotate(new Vector3(0, 0, endZRotation), 0.5f).SetEase(Ease.InOutCubic));
+        seq.Join(transform.DOScale(1f, 0.5f).SetEase(Ease.InElastic));
 
-            float angle = Mathf.Lerp(0, 360, easedProgress);
-            transform.rotation = Quaternion.Euler(0, 0, startRotation.eulerAngles.z + angle);
-            transform.position = Vector3.Lerp(startPosition, targetPosition, easedProgress);
+        yield return seq.WaitForCompletion();
 
-            scaleTween?.Kill();
-            transform.localScale = Vector3.Lerp(startScale, Vector3.one, easedProgress);
-
-            yield return null;
-        }
-
-        transform.rotation = Quaternion.identity;
-        transform.position = targetPosition;
-        transform.localScale = Vector3.one;
+        // transform.rotation = Quaternion.identity;
 
         if (isLeftSlot)
         {
