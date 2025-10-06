@@ -297,14 +297,8 @@ public class CardInteractionHandler : MonoBehaviour, IPointerDownHandler, IBegin
             new Color(0, 1, 0, 0.4f) : new Color(0, 0, 0, 0.3f);
     }
 
-    float EaseInOutCubic(float t)
-    {
-        return t < 0.5f ? 4f * t * t * t : 1f - Mathf.Pow(-2f * t + 2f, 3f) / 2f;
-    }
-
     IEnumerator SpinAndLandOnSlot(bool isLeftSlot, int cardIdx)
     {
-        float endZRotation = isLeftSlot ? 25f : -25f;
         // Check for existing card
         GameObject existingCard = isLeftSlot ?
             GameManager.Instance.selectedLeftCardObject :
@@ -315,7 +309,7 @@ public class CardInteractionHandler : MonoBehaviour, IPointerDownHandler, IBegin
             CardInteractionHandler existingHandler = existingCard.GetComponent<CardInteractionHandler>();
             if (existingHandler != null)
             {
-                existingHandler.ReturnToHandFromPlayedPosition();
+                existingHandler.ResetCard();
             }
             yield return new WaitForSeconds(0.1f);
         }
@@ -325,6 +319,7 @@ public class CardInteractionHandler : MonoBehaviour, IPointerDownHandler, IBegin
             GameManager.Instance.playerRightCard.gameObject;
 
         // DOTween sequence
+        float endZRotation = isLeftSlot ? 25f : -25f;
         Sequence seq = DOTween.Sequence();
         seq.Append(transform.DOMove(targetSlot.transform.position, 0.5f).SetEase(Ease.InOutCubic));
         seq.Join(transform.DORotate(new Vector3(0, 0, endZRotation), 0.5f).SetEase(Ease.InOutCubic));
@@ -355,24 +350,14 @@ public class CardInteractionHandler : MonoBehaviour, IPointerDownHandler, IBegin
 
     IEnumerator SmoothReturnToHand()
     {
-        float duration = 0.3f;
-        float elapsed = 0f;
-        Vector3 startPosition = transform.position;
-        Quaternion startRotation = transform.rotation;
-        Vector3 startScale = transform.localScale;
+        scaleTween?.Kill();
 
-        while (elapsed < duration)
-        {
-            elapsed += Time.deltaTime;
-            float progress = elapsed / duration;
+        Sequence seq = DOTween.Sequence();
+        seq.Append(transform.DOMove(originalHandPosition, 0.7f).SetEase(Ease.InOutCubic));
+        seq.Join(transform.DORotate(Vector3.zero, 0.7f).SetEase(Ease.InOutCubic));
+        seq.Join(transform.DOScale(1f, 0.7f).SetEase(Ease.InOutCubic));
 
-            transform.position = Vector3.Lerp(startPosition, originalHandPosition, progress);
-            transform.rotation = Quaternion.Lerp(startRotation, Quaternion.identity, progress);
-            scaleTween?.Kill();
-            transform.localScale = Vector3.Lerp(startScale, Vector3.one, progress);
-
-            yield return null;
-        }
+        yield return seq.WaitForCompletion();
 
         transform.SetParent(originalParent);
         transform.position = originalHandPosition;
