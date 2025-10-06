@@ -1284,10 +1284,10 @@ function dbg(text) {
 // === Body ===
 
 var ASM_CONSTS = {
-  6193232: () => { Module['emscripten_get_now_backup'] = performance.now; },  
- 6193287: ($0) => { performance.now = function() { return $0; }; },  
- 6193335: ($0) => { performance.now = function() { return $0; }; },  
- 6193383: () => { performance.now = Module['emscripten_get_now_backup']; }
+  6192944: () => { Module['emscripten_get_now_backup'] = performance.now; },  
+ 6192999: ($0) => { performance.now = function() { return $0; }; },  
+ 6193047: ($0) => { performance.now = function() { return $0; }; },  
+ 6193095: () => { performance.now = Module['emscripten_get_now_backup']; }
 };
 
 
@@ -1663,13 +1663,6 @@ var ASM_CONSTS = {
         HEAPF64[usedJSptr] = NaN;
       }
     }
-
-  function _IsAndroid() {
-          if (typeof window.isAndroid !== 'undefined') {
-              return window.isAndroid;
-          }
-          return /Android/i.test(navigator.userAgent);
-      }
 
   var JS_Accelerometer = null;
   
@@ -17450,7 +17443,6 @@ function checkIncomingModuleAPI() {
 var wasmImports = {
   "GetJSLoadTimeInfo": _GetJSLoadTimeInfo,
   "GetJSMemoryInfo": _GetJSMemoryInfo,
-  "IsAndroid": _IsAndroid,
   "JS_Accelerometer_IsRunning": _JS_Accelerometer_IsRunning,
   "JS_Accelerometer_Start": _JS_Accelerometer_Start,
   "JS_Accelerometer_Stop": _JS_Accelerometer_Stop,
